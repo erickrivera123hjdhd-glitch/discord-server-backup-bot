@@ -17,10 +17,10 @@ if not TOKEN:
     raise RuntimeError("BOT_TOKEN not set in environment")
 
 DB_PATH = os.getenv("DB_PATH", "backups.db")
+GUILD_ID = os.getenv("GUILD_ID")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("backupbot")
 
-# Message content is enabled so both slash commands and prefix commands work.
 intents = discord.Intents.default()
 intents.guilds = True
 intents.message_content = True
@@ -275,10 +275,23 @@ async def restore(guild, data):
 @bot.event
 async def on_ready():
     db().close()
+    logger.info("Logged in as %s (%s)", bot.user, bot.user.id)
+    logger.info("Connected to %d guild(s)", len(bot.guilds))
+
     try:
+        # Global sync makes commands available everywhere the bot is installed.
         synced = await bot.tree.sync()
-        logger.info("Logged in as %s (%s)", bot.user, bot.user.id)
-        logger.info("Synced %d slash commands", len(synced))
+        logger.info("Global slash-command sync complete: %d command(s)", len(synced))
+
+        # Guild sync makes commands appear immediately in the test/server guild.
+        if GUILD_ID:
+            guild = bot.get_guild(int(GUILD_ID))
+            if guild:
+                bot.tree.copy_global_to(guild=guild)
+                guild_synced = await bot.tree.sync(guild=guild)
+                logger.info("Guild slash-command sync complete for %s: %d command(s)", guild.name, len(guild_synced))
+            else:
+                logger.warning("GUILD_ID=%s was not found in the bot's guilds", GUILD_ID)
     except Exception:
         logger.exception("Slash command sync failed")
 
